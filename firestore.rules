@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMember(listId) {
+      return signedIn() && request.auth.uid in get(/databases/$(database)/documents/lists/$(listId)).data.members;
+    }
+
+    // Each person's profile and push tokens are private to them.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      match /tokens/{token} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /lists/{listId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40;
+      // Members edit the list's name, stores and current trip. Membership changes go through
+      // the joinList function, except that anyone may remove themselves.
+      allow update: if signedIn() && request.auth.uid in resource.data.members && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'ownerId', 'inviteCode'])
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberNames'])
+          && request.resource.data.members == resource.data.members.removeAll([request.auth.uid])
+        )
+      );
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /items/{itemId} {
+        allow read, delete: if isMember(listId);
+        allow create, update: if isMember(listId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+      }
+
+      // "added" events are written by the server after batching; people write arrivals and summaries.
+      match /events/{eventId} {
+        allow read: if isMember(listId);
+        allow create: if isMember(listId)
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.type in ['at_store', 'summary'];
+      }
+    }
+
+    // Server-only bookkeeping.
+    match /pendingBatches/{id} {
+      allow read, write: if false;
+    }
+  }
+}
