@@ -1,0 +1,4 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": { "namespace": "android_app", "package_name": "il.yachadbasal.app", "sha256_cert_fingerprints": ["FF:03:2A:15:4B:50:64:A5:8A:EF:F0:F1:D8:D3:04:56:10:1B:D4:20:1C:EC:5F:1C:A1:A9:FF:27:2E:F8:E9:6B"] }
+}]

@@ -14,6 +14,7 @@ export default defineConfig({
       manifest: {
         name: "יחד בסל",
         short_name: "יחד בסל",
+        id: "/",
         description: "רשימת קניות משותפת לכל הבית, עם התראות כשמוסיפים פריטים וכשמישהו בסופר",
         lang: "he",
         dir: "rtl",
@@ -22,12 +23,13 @@ export default defineConfig({
         background_color: "#F5F7F2",
         theme_color: "#2E6B45",
         icons: [
-          { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-          { src: "/icon-maskable.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       devOptions: { enabled: true, type: "module" },
     }),
   ],
-  test: { include: ["src/**/*.test.ts"] },
+  test: { include: ["src/**/*.test.ts", "supabase/functions/_shared/*.test.ts"] },
 });

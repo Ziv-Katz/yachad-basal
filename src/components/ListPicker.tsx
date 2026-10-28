@@ -1,19 +1,19 @@
 import { useState } from "react";
-import type { User } from "firebase/auth";
-import { createList, joinList, type List } from "../lib/data";
+import { createList, ensureProfile, joinList, type List } from "../lib/data";
 import { useToast } from "./Toasts";
 
-export function ListPicker({ user, lists, onOpen, onSignOut }: { user: User; lists: List[]; onOpen: (id: string) => void; onSignOut: () => void }) {
+export function ListPicker({ uid, myName, lists, onOpen, onSignOut }: {
+  uid: string; myName: string; lists: List[]; onOpen: (id: string) => void; onSignOut: () => void;
+}) {
   const toast = useToast();
   const [name, setName] = useState("הבית");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const myName = user.displayName ?? "";
 
   const run = async (fn: () => Promise<string>, fail: string) => {
     setBusy(true);
-    try { onOpen(await fn()); }
-    catch (e) { toast(fail, (e as { message?: string }).message?.includes("not-found") ? "לא מצאתי רשימה עם הקוד הזה." : "נסו שוב בעוד רגע."); }
+    try { await ensureProfile(myName); onOpen(await fn()); }
+    catch (e) { toast(fail, (e as Error).message === "not-found" ? "לא מצאתי רשימה עם הקוד הזה." : "נסו שוב בעוד רגע."); }
     finally { setBusy(false); }
   };
 
@@ -38,7 +38,7 @@ export function ListPicker({ user, lists, onOpen, onSignOut }: { user: User; lis
         </section>
       )}
 
-      <form className="card" onSubmit={(e) => { e.preventDefault(); if (name.trim()) run(() => createList(user.uid, name.trim(), myName), "הרשימה לא נוצרה"); }}>
+      <form className="card" onSubmit={(e) => { e.preventDefault(); if (name.trim()) run(() => createList(uid, name.trim()), "הרשימה לא נוצרה"); }}>
         <h2 className="h2">רשימה חדשה</h2>
         <div className="add">
           <input id="newListName" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="שם הרשימה" />
@@ -46,9 +46,9 @@ export function ListPicker({ user, lists, onOpen, onSignOut }: { user: User; lis
         </div>
       </form>
 
-      <form className="card" onSubmit={(e) => { e.preventDefault(); if (code.trim()) run(() => joinList(code.trim(), myName), "ההצטרפות לא הצליחה"); }}>
+      <form className="card" onSubmit={(e) => { e.preventDefault(); if (code.trim()) run(() => joinList(code.trim()), "ההצטרפות לא הצליחה"); }}>
         <h2 className="h2">הצטרפות לרשימה קיימת</h2>
-        <p className="sub">בקשו ממי שפתח את הרשימה את קוד ההזמנה בן 6 התווים.</p>
+        <p className="sub">קיבלתם קישור בוואטסאפ? פשוט לוחצים עליו. אפשר גם להקליד את הקוד בן 6 התווים.</p>
         <div className="add">
           <input id="joinCode" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={6} placeholder="למשל K7M2QX" aria-label="קוד הזמנה" dir="ltr" />
           <button className="primary" disabled={busy}>הצטרפות</button>

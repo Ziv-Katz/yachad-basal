@@ -1,39 +1,60 @@
 import { useEffect, useState } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut, type User } from "firebase/auth";
-import { auth, configured, googleProvider, useEmulators } from "./lib/firebase";
-import { saveProfile, useLists } from "./lib/data";
-import { onForegroundAlert } from "./lib/push";
+import type { Session } from "@supabase/supabase-js";
+import { configured, sb } from "./lib/supabase";
+import { ensureProfile, joinList, useLists } from "./lib/data";
+import { refreshPushSubscription } from "./lib/push";
 import { ToastProvider, useToast } from "./components/Toasts";
 import { ListPicker } from "./components/ListPicker";
 import { ListView } from "./components/ListView";
+import { Auth } from "./components/Auth";
+
+/** Invite links look like https://…/#join=K7M2QX (same pattern as the expenses app). */
+export const inviteCodeFromHash = () => /^#join=([A-Z0-9]{6})$/i.exec(location.hash)?.[1]?.toUpperCase() ?? null;
 
 export default function App() {
   return <ToastProvider><Shell /></ToastProvider>;
 }
 
 function Shell() {
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  useEffect(() => onAuthStateChanged(auth, (u) => {
-    setUser(u);
-    if (u) saveProfile(u.uid, u.displayName ?? "").catch(() => {});
-  }), []);
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [recovery, setRecovery] = useState(false);
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = sb.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+      setSession(s);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
-  if (!configured) return <Setup />;
-  if (user === undefined) return <div className="wrap"><p className="sub">טוען…</p></div>;
-  if (!user) return <SignIn />;
-  return <Home user={user} />;
+  if (!configured) return <div className="wrap"><h1>יחד בסל</h1><div className="notice">חסרים פרטי החיבור ל-Supabase. ממלאים את ‎.env.local‎ לפי ה-README.</div></div>;
+  if (session === undefined) return <div className="wrap"><p className="sub">טוען…</p></div>;
+  if (!session || recovery) return <Auth mode={recovery ? "newpass" : undefined} onDone={() => setRecovery(false)} />;
+  return <Home session={session} />;
 }
 
-function Home({ user }: { user: User }) {
+function Home({ session }: { session: Session }) {
   const toast = useToast();
-  const lists = useLists(user.uid);
+  const uid = session.user.id;
+  const myName = (session.user.user_metadata?.name as string) ?? "";
+  const [lists, refreshLists] = useLists(uid);
   const [listId, setListId] = useState<string | null>(() => new URLSearchParams(location.search).get("list"));
 
   useEffect(() => {
-    let off = () => {};
-    onForegroundAlert((t, b) => toast(t, b)).then((f) => (off = f));
-    return () => off();
-  }, [toast]);
+    ensureProfile(myName).catch(() => {});
+    refreshPushSubscription();
+  }, [myName]);
+
+  // Opened from an invite link: join right away.
+  useEffect(() => {
+    const code = inviteCodeFromHash();
+    if (!code) return;
+    history.replaceState(null, "", location.pathname + location.search);
+    ensureProfile(myName)
+      .then(() => joinList(code))
+      .then((id) => { refreshLists(); setListId(id); toast("הצטרפת לרשימה"); })
+      .catch((e) => toast("ההצטרפות לא הצליחה", e.message === "not-found" ? "הקוד בקישור לא נמצא. בקשו קישור חדש." : "נסו שוב בעוד רגע."));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Open the only list straight away; fall back to the picker if the chosen list is gone.
   useEffect(() => {
@@ -44,38 +65,6 @@ function Home({ user }: { user: User }) {
 
   const list = lists?.find((l) => l.id === listId);
   if (!lists) return <div className="wrap"><p className="sub">טוען את הרשימות…</p></div>;
-  if (list) return <ListView key={list.id} list={list} user={user} onBack={lists.length > 1 ? () => setListId(null) : undefined} />;
-  return <ListPicker user={user} lists={lists} onOpen={setListId} onSignOut={() => signOut(auth)} />;
-}
-
-function SignIn() {
-  const [err, setErr] = useState("");
-  return (
-    <div className="wrap center">
-      <h1>יחד בסל</h1>
-      <p className="lead">רשימת קניות אחת לכל הבית. כשמישהו מוסיף פריטים או מגיע לסופר, כולם יודעים.</p>
-      <button className="primary big" onClick={() => signInWithPopup(auth, googleProvider).catch(() => setErr("ההתחברות לא הושלמה. נסו שוב."))}>
-        התחברות עם Google
-      </button>
-      {err && <p className="error">{err}</p>}
-      {useEmulators && (
-        <div className="row">
-          {["דנה", "יואב"].map((n, i) => (
-            <button key={n} onClick={() => signInWithCredential(auth, GoogleAuthProvider.credential(JSON.stringify({ sub: `dev-${i}`, email: `dev${i}@example.com`, name: n, email_verified: true })))}>
-              כניסת בדיקה: {n}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Setup() {
-  return (
-    <div className="wrap">
-      <h1>יחד בסל</h1>
-      <div className="notice">חסרים פרטי החיבור ל-Firebase. העתיקו את ‎.env.example‎ ל-‎.env.local‎ ומלאו את הערכים לפי ה-README.</div>
-    </div>
-  );
+  if (list) return <ListView key={list.id} list={list} uid={uid} onBack={() => setListId(null)} />;
+  return <ListPicker uid={uid} myName={myName} lists={lists} onOpen={(id) => { refreshLists(); setListId(id); }} onSignOut={() => sb.auth.signOut()} />;
 }

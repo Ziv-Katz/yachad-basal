@@ -13,19 +13,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            functions/package-lock.json
       - run: npm ci
-      - run: npm ci
-        working-directory: functions
-      - name: Web app typecheck, tests and build
+      - name: Typecheck, unit tests and build
         run: |
           npm run typecheck
           npm test
           npm run build
-      - name: Functions build and tests
-        working-directory: functions
-        run: |
-          npm run build
-          npm test

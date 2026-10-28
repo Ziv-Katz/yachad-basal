@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAlert, listPreview, MAX_WAIT_MS, QUIET_MS, shouldFlush } from "./alerts";
-
-describe("shouldFlush", () => {
-  it("waits while additions keep coming", () => {
-    expect(shouldFlush({ items: ["חלב"], firstAt: 0, lastAt: 1000 }, 1000 + QUIET_MS - 1)).toBe(false);
-  });
-  it("flushes after a quiet minute", () => {
-    expect(shouldFlush({ items: ["חלב"], firstAt: 0, lastAt: 1000 }, 1000 + QUIET_MS)).toBe(true);
-  });
-  it("flushes a long-running batch even without a quiet gap", () => {
-    expect(shouldFlush({ items: ["חלב"], firstAt: 0, lastAt: MAX_WAIT_MS - 10 }, MAX_WAIT_MS)).toBe(true);
-  });
-});
+import { formatAlert, fromRow, listPreview } from "./alerts.ts";
 
 describe("formatAlert", () => {
   it("groups several additions into one alert", () => {
@@ -31,4 +19,10 @@ describe("formatAlert", () => {
 
 it("truncates long lists", () => {
   expect(listPreview(["א", "ב", "ג", "ד", "ה", "ו", "ז"])).toBe("א, ב, ג, ד, ה ועוד 2");
+});
+
+it("reads an events row", () => {
+  expect(fromRow({ type: "added", created_by: "u1", payload: { items: ["חלב"], urgent: true } })).toEqual({ type: "added", by: "u1", items: ["חלב"] });
+  expect(fromRow({ type: "at_store", created_by: "u1", payload: {} })).toEqual({ type: "at_store", by: "u1", storeName: null });
+  expect(fromRow({ type: "other", created_by: "u1", payload: {} })).toBeNull();
 });

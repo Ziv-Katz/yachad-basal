@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "firebase/auth";
 import {
   addItem, clearDone, endTrip, leaveList, removeItem, saveStores, startTrip, toggleItem, useEvents, useItems,
   type Item, type List, type ListEvent,
@@ -22,11 +21,11 @@ const rel = (t: number) => {
   return h < 24 ? `לפני ${h} שע׳` : new Date(t).toLocaleDateString("he-IL");
 };
 
-export function ListView({ list, user, onBack }: { list: List; user: User; onBack?: () => void }) {
+export function ListView({ list, uid, onBack }: { list: List; uid: string; onBack?: () => void }) {
   const toast = useToast();
   const items = useItems(list.id);
   const events = useEvents(list.id);
-  const me = user.uid;
+  const me = uid;
   const nm = (id?: string | null) => (id === me ? "את/ה" : (id && list.memberNames[id]) || "מישהו מהבית");
 
   const [name, setName] = useState("");
@@ -49,10 +48,10 @@ export function ListView({ list, user, onBack }: { list: List; user: User; onBac
   // Arrival detection: only while the app is open, only if this person turned it on, only when nobody is already shopping.
   const geoOn = store.get("yb-geo") === "1";
   useEffect(() => {
-    if (!geoOn || trip || !list.stores?.length || !("geolocation" in navigator)) { setArrivedAt(null); return; }
+    if (!geoOn || trip || !list.stores.length || !("geolocation" in navigator)) { setArrivedAt(null); return; }
     const id = navigator.geolocation.watchPosition(
       (p) => {
-        const s = nearestStore({ lat: p.coords.latitude, lng: p.coords.longitude }, list.stores ?? []);
+        const s = nearestStore({ lat: p.coords.latitude, lng: p.coords.longitude }, list.stores);
         const dismissed = store.get(`yb-dismiss-${list.id}`) === new Date().toDateString();
         setArrivedAt(s && !dismissed ? s : null);
       },
@@ -95,7 +94,7 @@ export function ListView({ list, user, onBack }: { list: List; user: User; onBac
     <div className="wrap">
       <header>
         <div>
-          {onBack && <button className="link" onClick={onBack}>→ כל הרשימות</button>}
+          <button className="link" onClick={onBack}>→ כל הרשימות</button>
           <h1>{list.name}</h1>
           <p className="sub">{list.members.length > 1 ? `${list.members.length} משתתפים` : "רק את/ה כרגע. הזמינו את בני הבית בהגדרות."}</p>
         </div>
@@ -110,7 +109,7 @@ export function ListView({ list, user, onBack }: { list: List; user: User; onBac
       {push === "default" && (
         <div className="notice row-between">
           <span>הפעילו התראות כדי לדעת כשמוסיפים פריטים או כשמישהו בסופר.</span>
-          <button className="primary" onClick={async () => setPush(await enablePush(me).catch(() => "denied" as const))}>הפעלה</button>
+          <button className="primary" onClick={async () => setPush(await enablePush().catch(() => "denied" as const))}>הפעלה</button>
         </div>
       )}
       {push === "needs-install" && <div className="notice">באייפון, התראות עובדות רק אחרי שמוסיפים את האפליקציה למסך הבית: כפתור השיתוף ב-Safari ואז "הוספה למסך הבית".</div>}
@@ -179,7 +178,7 @@ export function ListView({ list, user, onBack }: { list: List; user: User; onBac
           {confirmClear ? (
             <span className="row">
               <span>למחוק את כל מה שנקנה?</span>
-              <button className="danger" onClick={() => { clearDone(list.id, items).catch(fail("המחיקה לא הצליחה")); setConfirmClear(false); }}>מחיקה</button>
+              <button className="danger" onClick={() => { clearDone(list.id).catch(fail("המחיקה לא הצליחה")); setConfirmClear(false); }}>מחיקה</button>
               <button onClick={() => setConfirmClear(false)}>ביטול</button>
             </span>
           ) : <button disabled={!done} onClick={() => setConfirmClear(true)}>ניקוי פריטים שנקנו</button>}
@@ -232,8 +231,14 @@ function Settings({ list, me, onClose, onLeft }: { list: List; me: string; onClo
   const [storeName, setStoreName] = useState("");
   const [geo, setGeo] = useState(store.get("yb-geo") === "1");
   const [confirmLeave, setConfirmLeave] = useState(false);
-  const stores = list.stores ?? [];
+  const stores = list.stores;
 
+  const inviteUrl = `${location.origin}/#join=${list.inviteCode}`;
+  const inviteText = `מצטרפים לרשימת הקניות "${list.name}" ביחד בסל:\n${inviteUrl}\n(או מזינים באפליקציה את הקוד ${list.inviteCode})`;
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ text: inviteText }); return; } catch { /* cancelled */ } }
+    window.open(`https://wa.me/?text=${encodeURIComponent(inviteText)}`, "_blank");
+  };
   const copy = () => navigator.clipboard?.writeText(list.inviteCode).then(() => toast("הקוד הועתק"), () => {});
 
   const addHere = () => {
@@ -250,8 +255,8 @@ function Settings({ list, me, onClose, onLeft }: { list: List; me: string; onClo
     <Sheet title="הגדרות הרשימה" onClose={onClose}>
       <section className="card">
         <h4>הזמנת בני הבית</h4>
-        <p className="sub">שלחו להם את הקוד. הם נכנסים לאפליקציה, בוחרים "הצטרפות לרשימה קיימת" ומקלידים אותו.</p>
-        <div className="row-between"><span className="code" dir="ltr">{list.inviteCode}</span><button onClick={copy}>העתקה</button></div>
+        <p className="sub">שלחו להם קישור בוואטסאפ. מי שלוחץ עליו נכנס או נרשם, ומצטרף לרשימה מיד. אפשר גם להקליד את הקוד.</p>
+        <div className="row-between"><span className="code" dir="ltr">{list.inviteCode}</span><span className="row"><button onClick={copy}>העתקה</button><button className="primary" onClick={share}>שליחה בוואטסאפ</button></span></div>
       </section>
 
       <section className="card">

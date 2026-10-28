@@ -1,20 +1,9 @@
-// Pure helpers for building alerts, kept free of Firebase so they can be unit tested.
+// Wording of the push alerts. Pure, so it runs both in the Edge Function (Deno) and in unit tests (Node).
 
 export type ListEvent =
   | { type: "added"; by: string; items: string[] }
   | { type: "at_store"; by: string; storeName?: string | null }
   | { type: "summary"; by: string; bought: string[]; missing: string[]; minutes: number };
-
-export type Batch = { items: string[]; firstAt: number; lastAt: number };
-
-/** Quiet time after the last addition before we send the grouped alert. */
-export const QUIET_MS = 60_000;
-/** Never hold a batch longer than this, even if the person keeps adding. */
-export const MAX_WAIT_MS = 5 * 60_000;
-
-export function shouldFlush(batch: Batch, now: number): boolean {
-  return now - batch.lastAt >= QUIET_MS || now - batch.firstAt >= MAX_WAIT_MS;
-}
 
 export function listPreview(items: string[], max = 5): string {
   if (items.length <= max) return items.join(", ");
@@ -43,4 +32,16 @@ export function formatAlert(e: ListEvent, name: string, listName: string): { tit
       return { title: `${who} סיים/ה את הקנייה`, body: parts.join(" · ") };
     }
   }
+}
+
+/** Turn an events row into the shape formatAlert expects. */
+export function fromRow(row: { type: string; created_by: string; payload: Record<string, unknown> }): ListEvent | null {
+  const p = row.payload ?? {};
+  const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+  switch (row.type) {
+    case "added": return { type: "added", by: row.created_by, items: strings(p.items) };
+    case "at_store": return { type: "at_store", by: row.created_by, storeName: (p.store_name as string) ?? null };
+    case "summary": return { type: "summary", by: row.created_by, bought: strings(p.bought), missing: strings(p.missing), minutes: Number(p.minutes) || 1 };
+  }
+  return null;
 }

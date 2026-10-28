@@ -75,3 +75,7 @@ li.done .name { text-decoration: line-through; color: var(--muted); }
 .toasts { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 30; pointer-events: none; }
 .toast { background: var(--fg); color: var(--bg); border-radius: 12px; padding: 10px 14px; max-width: 520px; width: 100%; box-shadow: 0 6px 24px rgb(0 0 0 / .18); display: flex; flex-direction: column; }
 @media (prefers-reduced-motion: no-preference) { .toast { animation: up .25s ease-out; } @keyframes up { from { transform: translateY(12px); opacity: .4; } } }
+.auth { width: 100%; max-width: 380px; text-align: start; }
+.auth label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.auth input { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.msg { margin: 0; font-size: 14px; }
