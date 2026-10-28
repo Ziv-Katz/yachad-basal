@@ -1,0 +1,10 @@
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
+
+/yachad-basal.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment; filename="yachad-basal.apk"
+
+/sw.js
+  Cache-Control: no-cache

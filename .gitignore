@@ -7,3 +7,8 @@ functions/lib/
 .firebase/
 *.log
 *-debug.log
+android/build/
+# The APK signing key must never be public. Keep a private backup: it is needed to build future versions.
+android/signing/
+supabase/.temp/
+supabase/.branches/
